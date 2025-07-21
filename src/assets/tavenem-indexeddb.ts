@@ -1,4 +1,4 @@
-import { openDB, deleteDB, IDBPCursorWithValue } from 'idb';
+const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
 
 interface DatabaseInfo {
     databaseName: string;
@@ -8,232 +8,190 @@ interface DatabaseInfo {
     storeNames: string[] | undefined | null;
 }
 
-interface CursorInfo {
-    db: DatabaseInfo;
-    cursor: IDBPCursorWithValue | null;
-}
+let clearResolve: (success: boolean) => void;
+let countResolve: (count: number) => void;
+let deleteDatabaseResolve: (success: boolean) => void;
+let deleteValueResolve: (success: boolean) => void;
+let getAllResolve: (items: any[]) => void;
+let getAllStringsResolve: (items: string[]) => void;
+let getBatchResolve: (items: any[]) => void;
+let getBatchStringsResolve: (items: string[]) => void;
+let getValueResolve: (value: any) => void;
+let getValueStringResolve: (value: string) => void;
+let putValueResolve: (success: boolean) => void;
+let putValuesResolve: (success: boolean) => void;
 
-const cursors: Record<string, CursorInfo> = {};
-
-async function openDatabase(databaseInfo: DatabaseInfo) {
-    if (databaseInfo.version === null) {
-        databaseInfo.version = undefined;
+worker.onmessage = (event) => {
+    switch (event.data.type) {
+        case 'clearResult':
+            resolveClear(event.data.success);
+            break;
+        case 'countResult':
+            resolveCount(event.data.count);
+            break;
+        case 'deleteDatabaseResult':
+            resolveDeleteDatabase(event.data.success);
+            break;
+        case 'deleteValueResult':
+            resolveDeleteValue(event.data.success);
+            break;
+        case 'getAllResult':
+            resolveGetAll(event.data.items);
+            break;
+        case 'getAllStringsResult':
+            resolveGetAllStrings(event.data.items);
+            break;
+        case 'getBatchResult':
+            resolveGetBatch(event.data.items);
+            break;
+        case 'getBatchStringsResult':
+            resolveGetBatchStrings(event.data.items);
+            break;
+        case 'getValueResult':
+            resolveGetValue(event.data.value);
+            break;
+        case 'getValueStringResult':
+            resolveGetValueString(event.data.value);
+            break;
+        case 'putValueResult':
+            resolvePutValue(event.data.success);
+            break;
+        case 'putValuesResult':
+            resolvePutValues(event.data.success);
+            break;
+        default:
+            console.error('Unknown message type:', event.data.type);
     }
-    databaseInfo.keyPath ??= 'id';
-
-    try {
-        const database = await openDB(
-            databaseInfo.databaseName,
-            databaseInfo.version, {
-                upgrade(db) {
-                    if (databaseInfo.storeNames) {
-                        for (const storeName of databaseInfo.storeNames) {
-                            if (!db.objectStoreNames.contains(storeName)) {
-                                db.createObjectStore(storeName, {
-                                    keyPath: databaseInfo.keyPath,
-                                });
-                            }
-                        }
-                    }
-                    if (db.objectStoreNames.length == 0
-                        && !db.objectStoreNames.contains(databaseInfo.databaseName)) {
-                        db.createObjectStore(databaseInfo.databaseName, {
-                            keyPath: databaseInfo.keyPath,
-                        });
-                    }
-                }
-            });
-        return database;
-    } catch (e) {
-        console.error(e);
-        return null;
-    }
-}
+};
 
 export async function clear(databaseInfo: DatabaseInfo) {
-    const db = await openDatabase(databaseInfo);
-    if (!db) {
-        return;
-    }
-    try {
-        return await db.clear(databaseInfo.storeName ?? databaseInfo.databaseName);
-    } catch (e) {
-        console.error(e);
-    }
+    return new Promise((resolve) => {
+        clearResolve = resolve;
+        worker.postMessage({ type: 'clear', databaseInfo });
+    });
 }
 
 export async function count(databaseInfo: DatabaseInfo) {
-    const db = await openDatabase(databaseInfo);
-    if (!db) {
-        return 0;
-    }
-    try {
-        return await db.count(databaseInfo.storeName ?? databaseInfo.databaseName);
-    } catch (e) {
-        console.error(e);
-        return 0;
-    }
+    return new Promise((resolve) => {
+        countResolve = resolve;
+        worker.postMessage({ type: 'count', databaseInfo });
+    });
 }
 
 export async function deleteDatabase(name: string) {
-    try {
-        await deleteDB(name);
-    } catch (e) {
-        console.error(e);
-    }
+    return new Promise((resolve) => {
+        deleteDatabaseResolve = resolve;
+        worker.postMessage({ type: 'deleteDatabase', name });
+    });
 }
 
 export async function deleteValue(databaseInfo: DatabaseInfo, key: IDBValidKey) {
-    const db = await openDatabase(databaseInfo);
-    if (!db) {
-        return false;
-    }
-    try {
-        await db.delete(databaseInfo.storeName ?? databaseInfo.databaseName, key);
-        return true;
-    } catch (e) {
-        console.error(e);
-        return false;
-    }
+    return new Promise((resolve) => {
+        deleteValueResolve = resolve;
+        worker.postMessage({ type: 'deleteValue', databaseInfo, key });
+    });
 }
 
 export async function getAll(databaseInfo: DatabaseInfo) {
-    const db = await openDatabase(databaseInfo);
-    if (!db) {
-        return [];
-    }
-    try {
-        return await db.getAll(databaseInfo.storeName ?? databaseInfo.databaseName);
-    } catch (e) {
-        console.error(e);
-        return [];
-    }
+    return new Promise((resolve) => {
+        getAllResolve = resolve;
+        worker.postMessage({ type: 'getAll', databaseInfo });
+    });
 }
 
 export async function getAllStrings(databaseInfo: DatabaseInfo) {
-    const db = await openDatabase(databaseInfo);
-    if (!db) {
-        return [];
-    }
-    try {
-        var items = await db.getAll(databaseInfo.storeName ?? databaseInfo.databaseName);
-        return items.map(v => JSON.stringify(v));
-    } catch (e) {
-        console.error(e);
-        return [];
-    }
+    return new Promise((resolve) => {
+        getAllStringsResolve = resolve;
+        worker.postMessage({ type: 'getAllStrings', databaseInfo });
+    });
 }
 
 export async function getBatch(databaseInfo: DatabaseInfo, reset: boolean) {
-    const db = await openDatabase(databaseInfo);
-    if (!db) {
-        return [];
-    }
-    const cursorKey = databaseInfo.databaseName + '.' + databaseInfo.storeName;
-    if (reset) {
-        delete cursors[cursorKey];
-    }
-    let cursorInfo = cursors[cursorKey];
-    if (!cursorInfo || cursorInfo.db.version != databaseInfo.version) {
-        try {
-            const cursor = await db.transaction(databaseInfo.storeName ?? databaseInfo.databaseName).store.openCursor();
-            cursorInfo = {
-                db: databaseInfo,
-                cursor,
-            };
-        } catch (e) {
-            console.error(e);
-        }
-    }
-    if (!cursorInfo) {
-        return [];
-    }
-    const items = [];
-    try {
-        while (cursorInfo.cursor && items.length < 20) {
-            items.push(cursorInfo.cursor.value);
-            cursorInfo.cursor = await cursorInfo.cursor.continue();
-        }
-    } catch (e) {
-        console.error(e);
-    }
-    cursors[cursorKey] = cursorInfo;
-    return items;
+    return new Promise((resolve) => {
+        getBatchResolve = resolve;
+        worker.postMessage({ type: 'getBatch', databaseInfo, reset });
+    });
 }
 
 export async function getBatchStrings(databaseInfo: DatabaseInfo, reset: boolean) {
-    const db = await openDatabase(databaseInfo);
-    if (!db) {
-        return [];
-    }
-    const cursorKey = databaseInfo.databaseName + '.' + databaseInfo.storeName;
-    if (reset) {
-        delete cursors[cursorKey];
-    }
-    let cursorInfo = cursors[cursorKey];
-    if (!cursorInfo || cursorInfo.db.version != databaseInfo.version) {
-        try {
-            const cursor = await db.transaction(databaseInfo.storeName ?? databaseInfo.databaseName).store.openCursor();
-            cursorInfo = {
-                db: databaseInfo,
-                cursor,
-            };
-        } catch (e) {
-            console.error(e);
-        }
-    }
-    if (!cursorInfo) {
-        return [];
-    }
-    const items = [];
-    try {
-        while (cursorInfo.cursor && items.length < 20) {
-            items.push(JSON.stringify(cursorInfo.cursor.value));
-            cursorInfo.cursor = await cursorInfo.cursor.continue();
-        }
-    } catch (e) {
-        console.error(e);
-    }
-    cursors[cursorKey] = cursorInfo;
-    return items;
+    return new Promise((resolve) => {
+        getBatchStringsResolve = resolve;
+        worker.postMessage({ type: 'getBatchStrings', databaseInfo, reset });
+    });
 }
 
 export async function getValue(databaseInfo: DatabaseInfo, key: IDBValidKey) {
-    const db = await openDatabase(databaseInfo);
-    if (!db) {
-        return null;
-    }
-    try {
-        return await db.get(databaseInfo.storeName ?? databaseInfo.databaseName, key);
-    } catch (e) {
-        console.error(e);
-        return null;
-    }
+    return new Promise((resolve) => {
+        getValueResolve = resolve;
+        worker.postMessage({ type: 'getValue', databaseInfo, key });
+    });
 }
 
 export async function getValueString(databaseInfo: DatabaseInfo, key: IDBValidKey) {
-    const db = await openDatabase(databaseInfo);
-    if (!db) {
-        return null;
-    }
-    try {
-        return JSON.stringify(await db.get(databaseInfo.storeName ?? databaseInfo.databaseName, key));
-    } catch (e) {
-        console.error(e);
-        return null;
-    }
+    return new Promise((resolve) => {
+        getValueStringResolve = resolve;
+        worker.postMessage({ type: 'getValueString', databaseInfo, key });
+    });
 }
 
 export async function putValue(databaseInfo: DatabaseInfo, value: string) {
-    const db = await openDatabase(databaseInfo);
-    if (!db) {
-        return false;
-    }
-    try {
-        await db.put(databaseInfo.storeName ?? databaseInfo.databaseName, JSON.parse(value));
-        return true;
-    } catch (e) {
-        console.error(e);
-        return false;
-    }
+    return new Promise((resolve) => {
+        putValueResolve = resolve;
+        worker.postMessage({ type: 'putValue', databaseInfo, value });
+    });
+}
+
+export async function putValues(databaseInfo: DatabaseInfo, values: string[]) {
+    return new Promise((resolve) => {
+        putValuesResolve = resolve;
+        worker.postMessage({ type: 'putValues', databaseInfo, values });
+    });
+}
+
+function resolveClear(success: boolean) {
+    clearResolve(success);
+}
+
+function resolveCount(count: number) {
+    countResolve(count);
+}
+
+function resolveDeleteDatabase(success: boolean) {
+    deleteDatabaseResolve(success);
+}
+
+function resolveDeleteValue(success: boolean) {
+    deleteValueResolve(success);
+}
+
+function resolveGetAll(items: any[]) {
+    getAllResolve(items);
+}
+
+function resolveGetAllStrings(items: string[]) {
+    getAllStringsResolve(items);
+}
+
+function resolveGetBatch(items: any[]) {
+    getBatchResolve(items);
+}
+
+function resolveGetBatchStrings(items: string[]) {
+    getBatchStringsResolve(items);
+}
+
+function resolveGetValue(value: any) {
+    getValueResolve(value);
+}
+
+function resolveGetValueString(value: string) {
+    getValueStringResolve(value);
+}
+
+function resolvePutValue(success: boolean) {
+    putValueResolve(success);
+}
+
+function resolvePutValues(success: boolean) {
+    putValuesResolve(success);
 }

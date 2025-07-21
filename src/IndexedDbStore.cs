@@ -379,4 +379,10 @@ public class IndexedDbStore(
 
     Task<bool> IDataStore.StoreItemAsync<T>(T? item, JsonTypeInfo<T>? typeInfo, TimeSpan? cacheTimeout) where T : class
         => StoreItemAsync(item, typeInfo);
+
+
+    public bool StoreItems<T>(ISet<T>? items) where T : class, IIdItem
+         => StoreItemsAsync(items).GetAwaiter().GetResult();
+    public async Task<bool> StoreItemsAsync<T>(ISet<T>? items) where T : class, IIdItem
+        => items is null || await Database.Service.StoreItemsAsync(this, items);
 }

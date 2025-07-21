@@ -26,3 +26,14 @@ await esbuild.build({
     outdir: args[1],
     sourcemap: true,
 });
+
+await esbuild.build({
+    entryPoints: [
+        "worker.ts",
+    ],
+    bundle: true,
+    format: 'esm',
+    minify: true,
+    outdir: args[1],
+    sourcemap: true,
+});

@@ -4,6 +4,7 @@
   "private": true,
   "devDependencies": {
     "esbuild": "0.24.2",
+    "eslint": "^9.31.0",
     "idb": "8.0.1",
     "typescript": "5.7.2"
   },
